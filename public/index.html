@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <!-- Global site tag (gtag.js) - Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=UA-19556587-5"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'UA-19556587-5');
+    </script>
+    <style>
+      @import url("https://rsms.me/inter/inter.css");
+      @import url('https://fonts.googleapis.com/css2?family=Kumbh+Sans:wght@300;400;700&display=swap');
+      html {
+        font-family: "Inter", sans-serif;
+        font-size: 14px;
+        color: #333;
+      }
+      input, select, pre {
+        font-family: "Inter", sans-serif;
+        font-size: 14px;
+        color: #333;
+      }
+
+      #container {
+        font-size: 12px;
+      }
+
+      input, select {
+        padding: 7px;
+        border: 1px solid #cdccd5;
+        border-radius: 5px; 
+      }
+
+      pre {
+        line-height: 1.4em;
+      }
+
+      a {
+        color: rgb(63, 81, 181);
+      }
+      
+      /* Tooltip container */
+      .tooltip {
+        position: relative;
+        display: inline-block;
+        border-bottom: 1px dotted black; /* If you want dots under the hoverable text */
+        cursor: pointer;
+      }
+
+      /* Tooltip text */
+      .tooltip .tooltiptext {
+        visibility: hidden;
+        width: 200px;
+        background-color: #fff;
+        color: #000;
+        padding: 7px;
+        border-radius: 2px;
+        border: 1px solid #cdccd5;
+        filter: drop-shadow(0, 0, 10px, #000);
+
+        /* Position the tooltip text */
+        position: absolute;
+        z-index: 1;
+        top: 0;
+        left: 50%;
+        margin-left: 10px;
+
+        /* Fade in tooltip */
+        opacity: 0;
+        transition: opacity 0.3s;
+      }
+
+      /* Show the tooltip text when you mouse over the tooltip container */
+      .tooltip:hover .tooltiptext {
+        visibility: visible;
+        opacity: 1;
+      }
+
+      .flex {
+        display: flex;
+      }
+
+      .flex-row {
+        flex-direction: row;
+      }
+
+      .flex-column {
+        flex-direction: column;
+      }
+
+      #calculate {
+        padding: 7px;
+        padding-top: 7px;
+        border: 1px solid #cdccd5;
+        border-radius: 5px;
+        text-align: center;
+        width: 80px; 
+        margin-top: 10px;
+        background: #fff;
+        cursor: default;
+      }
+    </style>
+  </head>
+<body>
+  <div style="width: 1020px; margin: auto;">
+    <h2>yVault ROI [Beta]</h2>
+    <p style="margin-top: -10px;"></p>by <a href="https://twitter.com/rrridges" target="_blank">@rrridges</a> / <a href="https://twitter.com/flipsidecrypto" target="_blank">@flipsidecrypto</a></p>
+    <div style="background: #F3F4F8; padding: 10px; border-radius: 5px;">
+      <div class="flex flex-column" style="width: 400px; ">    
+        <input type="text" id="accountAddress" placeholder="Account Address" style="margin-top: 10px;"/>
+        <select id="vaultAddress" style="margin-top: 10px;">
+          <option value="">Choose Vault...</option>
+          <option value="0x5dbcf33d8c2e976c6b560249878e6f1491bca25c" selected>yyDAI+yUSDC+yUSDT+yTUSD</option>
+          <option value="0x2994529c0652d127b7842094103715ec5299bbed">yyDAI+yUSDC+yUSDT+yBUSD</option>
+          <option value="0xACd43E627e64355f1861cEC6d3a6688B31a6F952">yDAI</option>
+          <option value="0x2f08119c6f07c006695e079aafc638b8789faf18">yUSDT</option>
+          <option value="0x37d19d1c4e1fa9dc47bd1ea12f742a0887eda74a">yTUSD</option>
+          <option value="0x7ff566e1d69deff32a7b244ae7276b9f90e9d0f6">ycrvRenWSBTC</option>
+          <option value="0xba2e7fed597fd0e3e70f5130bcdbbfe06bb94fe1">yYFI</option>
+          <option value="0xe1237aA7f535b0CC33Fd973D66cBf830354D16c7">yWETH</option>
+          <option value="0x29E240CFD7946BA20895a7a02eDb25C210f9f324">yaLINK</option>
+        </select>
+        <div style="display: flex; flex-direction: row; align-items: baseline; width: 400px; justify-content: space-between;">
+          <div id="calculate">Calculate</div>
+          <span><input type="checkbox" id="includeTransfers" checked/> Include Transfers 
+            <span class="tooltip">[?]
+              <span class="tooltiptext">Treat transfers of the vault token like deposits and withdrawals. Inbound transfers are treated as if they were deposits, and outbound transfers are treated as if they were withdrawals. 
+                <br/><br/>Leaving this box unchecked will ignore transfers of vault tokens that were not explicitly deposit or withdraw transactions (for example, supplying yyCRV on cream.finance)
+                </span>
+            </span>
+          </span>
+        </div>
+      </div>
+    </div>
+    <pre id="cons"></pre>
+    <div style="display: flex; flex-direction: row; margin-left: 75px; visibility: hidden;" class="results">
+      <div style="width: 500px">
+        <h3>Money-Weighted Return</h3>
+        <p style="margin-top: -10px">Earnings taking into account deposits & withdrawals.</p>
+      </div>
+      <div style="width: 500px">
+        <h3>Time-Weighted Return</h3>
+        <p style="margin-top: -10px">Performance of the vault since this account's first deposit.</p>
+      </div>
+    </div>
+
+    <svg id="container" width="1100" height="500">
+    </svg>
+
+    <div style="display: flex; flex-direction: row; margin-left: 75px; visibility: hidden;" class="results">
+      <div style="width: 480px">
+        <pre id="money-weighted-stats"></pre>
+      </div>
+      <div style="width: 480px; padding-left: 40px;">
+        <pre id="time-weighted-stats"></pre>
+      </div>
+    </div>
+  </div>
+</body>
+
+</html>
+    <script src="y-vault-roi-v0.0.1.js"></script>
+  </body>
+</html>
