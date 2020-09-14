@@ -1,9 +1,11 @@
 var d3 = require("d3");
 var _ = require("lodash");
 
+console.log('hi');
+
 let api = "https://api.thegraph.com/subgraphs/name/rrridges-crypto/yearn-vault-roi-dev";
 
-var formatter = function(n) {
+var formatter = function (n) {
   if (Math.abs(n) < 1) {
     return d3.format(',.4r')(n)
   } else {
@@ -12,13 +14,36 @@ var formatter = function(n) {
 }
 
 //getVaults(); // Hard-code for now instead of grabbing dynamically
+readURLSearchParams();
+
 d3.select('#calculate')
-  .on('click', function() {
-  let accountAddress = d3.select('#accountAddress').node().value.toLowerCase();
-  let vaultAddress = d3.select('#vaultAddress').node().value.toLowerCase();
-  let includeTransfers = d3.select('#includeTransfers').node().checked;
-  calculate(accountAddress, vaultAddress, includeTransfers);
-})
+  .on('click', function () {
+    let accountAddress = d3.select('#accountAddress').node().value.toLowerCase();
+    let vaultAddress = d3.select('#vaultAddress').node().value.toLowerCase();
+    let includeTransfers = d3.select('#includeTransfers').node().checked;
+
+    var params = new URLSearchParams();
+    params.set('accountAddress', accountAddress);
+    params.set('vaultAddress', vaultAddress);
+    window.history.replaceState({}, '', '?' + params.toString());
+
+    calculate(accountAddress, vaultAddress, includeTransfers);
+  })
+
+function readURLSearchParams() {
+  let params = new URLSearchParams(window.location.search);
+  var accountAddress = params.get('accountAddress');
+  var vaultAddress = params.get('vaultAddress');
+
+  console.log(vaultAddress);
+
+  if (vaultAddress) {
+    d3.select('#vaultAddress').property('value', vaultAddress);
+  }
+  if (accountAddress) {
+    d3.select('#accountAddress').attr('value', accountAddress);
+  }
+}
 
 function requestOptions() {
   return {
@@ -50,7 +75,7 @@ async function calculate(accountAddress, vaultAddress, includeTransfers) {
   d3.select('#cons').html("");
   d3.select('#container').html("");
   d3.selectAll('.results').style('visibility', 'hidden')
-  
+
   // Get deposits & withdrawals
   d3.select('#cons').text('Fetching activity...');
 
@@ -62,8 +87,8 @@ async function calculate(accountAddress, vaultAddress, includeTransfers) {
   let deposits = result.data.deposits;
   let withdraws = result.data.withdraws;
   let transfers = includeTransfers ? result.data.transfersOut.concat(result.data.transfersIn) : [];
-  
-  
+
+
   // Prepare to fetch 'getPricePerFullShare' at regular intervals
   d3.select('#cons').text('Fetching performance...');
   let depositBlocks = deposits.map(deposit => +deposit.blockNumber);
@@ -72,42 +97,41 @@ async function calculate(accountAddress, vaultAddress, includeTransfers) {
   let start = Math.min(...depositBlocks, ...withdrawBlocks, ...transferBlocks);
   let end = result.data.lastBlock[0].blockNumber; // latest block number in the 'transfers' collection
   let blocksToFetch = _.uniq(_.range(start, end, 2160).concat(depositBlocks).concat(withdrawBlocks).concat(transferBlocks).sort());
-  
+
   // Fetch 'getPricePerFullShare' for each graph datapoint
   var graphql = blockPriceQuery(blocksToFetch, vaultAddress);
   options.body = graphql;
   let resp = await fetch(api, options);
   let res = await resp.json();
-  
+
   // Sanitize the result
   let vaultPrice = blocksToFetch.map(blockNumber => ({
-  	blockNumber: blockNumber,
-    pricePerFullShare: +res.data['v'+blockNumber][0].getPricePerFullShare / 1e18,
+    blockNumber: blockNumber,
+    pricePerFullShare: +res.data['v' + blockNumber][0].getPricePerFullShare / 1e18,
   }));
-  
+
   // Clear loading text
   d3.select('#cons').text('');
-  
+
   // Calculate invested amount & account balance for each datapoint
   let balanceData = [];
   vaultPrice.forEach(block => {
-  	let c_deposits = deposits.filter(d => d.blockNumber <= block.blockNumber); // c stands for cumulative
+    let c_deposits = deposits.filter(d => d.blockNumber <= block.blockNumber); // c stands for cumulative
     let c_withdraws = withdraws.filter(w => w.blockNumber <= block.blockNumber);
     let c_transfers = transfers.filter(t => t.blockNumber <= block.blockNumber).map(t => ({
-    	value: (t.to.toLowerCase() == accountAddress.toLowerCase() ? t.value : -t.value) * t.getPricePerFullShare / 1e18,
+      value: (t.to.toLowerCase() == accountAddress.toLowerCase() ? t.value : -t.value) * t.getPricePerFullShare / 1e18,
       shares: t.to.toLowerCase() == accountAddress.toLowerCase() ? t.value : -t.value,
     }));
-  	
-    let invested = _.sum(c_deposits.map(d => d.amount / 1e18)) 
-    	+ _.sum(c_transfers.map(t => t.value / 1e18))
-    	- _.sum(c_withdraws.map(w => w.amount / 1e18));
-    let balance = (_.sum(c_deposits.map(d => d.shares / 1e18)) 
-    	+ _.sum(c_transfers.map(t => t.shares / 1e18))
+
+    let invested = _.sum(c_deposits.map(d => d.amount / 1e18))
+      + _.sum(c_transfers.map(t => t.value / 1e18))
+      - _.sum(c_withdraws.map(w => w.amount / 1e18));
+    let balance = (_.sum(c_deposits.map(d => d.shares / 1e18))
+      + _.sum(c_transfers.map(t => t.shares / 1e18))
       - _.sum(c_withdraws.map(w => w.shares / 1e18))) * block.pricePerFullShare;
-    
 
     balanceData.push({
-    	blockNumber: block.blockNumber, 
+      blockNumber: block.blockNumber,
       invested: invested,
       balance: balance,
     })
@@ -122,15 +146,15 @@ async function calculate(accountAddress, vaultAddress, includeTransfers) {
 function blockPriceQuery(blocksToFetch, vaultAddress) {
   var query = '{\n';
   blocksToFetch.forEach(blockNumber => {
-  	query += `
-    	v${blockNumber}: vaults(where: {id: "${vaultAddress}"}, block: {number: ${ blockNumber }}) {
+    query += `
+    	v${blockNumber}: vaults(where: {id: "${vaultAddress}"}, block: {number: ${blockNumber}}) {
         getPricePerFullShare
       }
       
     `
   })
   query += '}';
-  return JSON.stringify({query: `${query}`});
+  return JSON.stringify({ query: `${query}` });
 }
 
 function vaultsQuery() {
@@ -150,7 +174,7 @@ function vaultsQuery() {
 
 
 function activityQuery(accountAddress, vaultAddress) {
-	return JSON.stringify({
+  return JSON.stringify({
     query: `
     { 
       deposits (where: {account: "${accountAddress}", vaultAddress: "${vaultAddress}"}, orderBy: blockNumber) {
@@ -203,40 +227,40 @@ function drawTable(balanceData, deposits, withdraws, transfers, start, end, vaul
   var earnings = balanceData[balanceData.length - 1].balance - netDeposits;
   var simpleReturn = earnings / netDeposits;
   var blocksPerYear = 4 * 60 * 24 * 365; // ~one block every 15 seconds
-  var yearFraction = (end - start) / blocksPerYear;  
+  var yearFraction = (end - start) / blocksPerYear;
   var annualizedSimpleReturn = ((1 + simpleReturn) ** (1 / yearFraction)) - 1;
-  var simpleReturnStr = (netDeposits > 0) ? 
-    `${ formatter(simpleReturn * 100) + '%' } / Annualized ${ formatter(annualizedSimpleReturn * 100) + '%' }`
+  var simpleReturnStr = (netDeposits > 0) ?
+    `${formatter(simpleReturn * 100) + '%'} / Annualized ${formatter(annualizedSimpleReturn * 100) + '%'}`
     : 'N/A';
-  
+
   // Modified Dietz IRR: https://en.wikipedia.org/wiki/Modified_Dietz_method
   var A = balanceData[0].balance;
   var B = balanceData[balanceData.length - 1].balance;
   var F = netDeposits - balanceData[0].invested;
   var cf = [];
-  deposits.forEach(deposit => {cf.push({flow: deposit.amount / 1e18, blockNumber: deposit.blockNumber})});
-  withdraws.forEach(withdraw => {cf.push({flow: -withdraw.amount / 1e18, blockNumber: withdraw.blockNumber})});
-  transfers.forEach(transfer => {cf.push({flow: transfer.value / 1e18, blockNumber: transfer.blockNumber})});
+  deposits.forEach(deposit => { cf.push({ flow: deposit.amount / 1e18, blockNumber: deposit.blockNumber }) });
+  withdraws.forEach(withdraw => { cf.push({ flow: -withdraw.amount / 1e18, blockNumber: withdraw.blockNumber }) });
+  transfers.forEach(transfer => { cf.push({ flow: transfer.value / 1e18, blockNumber: transfer.blockNumber }) });
   var wcf = _.sum(cf.map(f => f.flow * ((end - f.blockNumber) / (end - start))))
-  
+
   var irr = (B - A - F) / wcf;
   var annualizedIrr = ((1 + irr) ** (1 / yearFraction)) - 1;
 
   var timeReturn = vaultPrice[vaultPrice.length - 1].pricePerFullShare / vaultPrice[0].pricePerFullShare - 1;
   var annualizedTimeReturn = ((1 + timeReturn) ** (1 / yearFraction)) - 1;
-  
+
 
 
   // Print out metrics
   d3.select('#money-weighted-stats').html(
-`Net Deposits: ${ formatter(netDeposits)}
-Earnings: ${ formatter(earnings) }
+    `Net Deposits: ${formatter(netDeposits)}
+Earnings: ${ formatter(earnings)}
 Simple Return: ${simpleReturnStr}
-IRR: ${ formatter(irr * 100) + '%' } / Annualized ${ formatter(annualizedIrr * 100) + '%' }
+IRR: ${ formatter(irr * 100) + '%'} / Annualized ${formatter(annualizedIrr * 100) + '%'}
 <a href="https://www.betterment.com/resources/performance-design/">What do these numbers mean?</a>`)
 
   d3.select('#time-weighted-stats').html(
-`Time-Weighted Return: ${ formatter(timeReturn * 100) + '%' } / Annualized ${ formatter(annualizedTimeReturn * 100) + '%' }
+    `Time-Weighted Return: ${formatter(timeReturn * 100) + '%'} / Annualized ${formatter(annualizedTimeReturn * 100) + '%'}
 <a href="https://www.betterment.com/resources/performance-design/">What do these numbers mean?</a>`)
 
 }
@@ -285,7 +309,7 @@ function drawMoneyWeightedChart(balanceData) {
       .y0(height)
       .y1(d => y(d.invested))
     )
-  
+
   // Create the circle that travels along the curve of chart
   var focus = lineChart
     .append('g')
@@ -335,10 +359,10 @@ function drawMoneyWeightedChart(balanceData) {
 
   function mouseover() {
     focus.style("opacity", 1)
-    focusText.style("opacity",1)
+    focusText.style("opacity", 1)
   }
 
-  var bisect = d3.bisector(function(d) { return d.blockNumber; }).right;
+  var bisect = d3.bisector(function (d) { return d.blockNumber; }).right;
 
   function mousemove(event) {
     // recover coordinate we need
@@ -346,9 +370,9 @@ function drawMoneyWeightedChart(balanceData) {
     var x0 = x.invert(pointerX);
     var i = bisect(balanceData, x0);
 
-    selectedData = balanceData[i-1]
+    selectedData = balanceData[i - 1]
     focus
-      .attr("d", function() {
+      .attr("d", function () {
         var d = "M" + pointerX + "," + 0;
         d += " " + pointerX + "," + height;
         d += "M" + 0 + "," + y(selectedData.balance);
@@ -372,7 +396,7 @@ function drawTimeWeightedChart(vaultPrice) {
   console.log(d3.extent(vaultPrice.map(d => d.pricePerFullShare)))
 
   var firstPrice = vaultPrice[0].pricePerFullShare;
-  var roi = vaultPrice.map(d => ({blockNumber: d.blockNumber, roi: d.pricePerFullShare / firstPrice}));
+  var roi = vaultPrice.map(d => ({ blockNumber: d.blockNumber, roi: d.pricePerFullShare / firstPrice }));
 
   console.log(roi);
 
@@ -417,7 +441,7 @@ function drawTimeWeightedChart(vaultPrice) {
     .style("stroke-width", "0.5px")
     .style("stroke-dasharray", "5,5")
     .style("opacity", 0)
-  
+
   var focusCircle = lineChart
     .append('g')
     .append('circle')
@@ -451,10 +475,10 @@ function drawTimeWeightedChart(vaultPrice) {
   function mouseover() {
     focusLine.style("opacity", 1)
     focusCircle.style("opacity", 1)
-    focusText.style("opacity",1)
+    focusText.style("opacity", 1)
   }
 
-  var bisect = d3.bisector(function(d) { return d.blockNumber; }).right;
+  var bisect = d3.bisector(function (d) { return d.blockNumber; }).right;
 
   function mousemove(event) {
     // recover coordinate we need
@@ -462,9 +486,9 @@ function drawTimeWeightedChart(vaultPrice) {
     var x0 = x.invert(pointerX);
     var i = bisect(roi, x0);
 
-    selectedData = roi[i-1]
+    selectedData = roi[i - 1]
     focusLine
-      .attr("d", function() {
+      .attr("d", function () {
         var d = "M" + x(selectedData.blockNumber) + "," + 0;
         d += " " + x(selectedData.blockNumber) + "," + height;
         return d;
