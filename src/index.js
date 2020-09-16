@@ -71,6 +71,10 @@ async function getVaults() {
 
 async function calculate(accountAddress, vaultAddress, includeTransfers) {
 
+  // Quick fix for yUSDT vault which has decimals == 1e6
+  // TODO: Add decimalMap, vaultAddress => decimals
+  var decimals = vaultAddress == "0x2f08119c6f07c006695e079aafc638b8789faf18" ? 1e6 : 1e18;
+
   // Clear any previous search
   d3.select('#cons').html("");
   d3.select('#container').html("");
@@ -107,7 +111,7 @@ async function calculate(accountAddress, vaultAddress, includeTransfers) {
   // Sanitize the result
   let vaultPrice = blocksToFetch.map(blockNumber => ({
     blockNumber: blockNumber,
-    pricePerFullShare: +res.data['v' + blockNumber][0].getPricePerFullShare / 1e18,
+    pricePerFullShare: +res.data['v' + blockNumber][0].getPricePerFullShare / 1e18, // getPricePerFullShare has hard-coded 1e18 in the contracts, NOT using 'decimals'
   }));
 
   // Clear loading text
@@ -119,16 +123,16 @@ async function calculate(accountAddress, vaultAddress, includeTransfers) {
     let c_deposits = deposits.filter(d => d.blockNumber <= block.blockNumber); // c stands for cumulative
     let c_withdraws = withdraws.filter(w => w.blockNumber <= block.blockNumber);
     let c_transfers = transfers.filter(t => t.blockNumber <= block.blockNumber).map(t => ({
-      value: (t.to.toLowerCase() == accountAddress.toLowerCase() ? t.value : -t.value) * t.getPricePerFullShare / 1e18,
+      value: (t.to.toLowerCase() == accountAddress.toLowerCase() ? t.value : -t.value) * t.getPricePerFullShare / 1e18, // getPricePerFullShare has hard-coded 1e18 in the contracts, NOT using 'decimals'
       shares: t.to.toLowerCase() == accountAddress.toLowerCase() ? t.value : -t.value,
     }));
 
-    let invested = _.sum(c_deposits.map(d => d.amount / 1e18))
-      + _.sum(c_transfers.map(t => t.value / 1e18))
-      - _.sum(c_withdraws.map(w => w.amount / 1e18));
-    let balance = (_.sum(c_deposits.map(d => d.shares / 1e18))
-      + _.sum(c_transfers.map(t => t.shares / 1e18))
-      - _.sum(c_withdraws.map(w => w.shares / 1e18))) * block.pricePerFullShare;
+    let invested = _.sum(c_deposits.map(d => d.amount / decimals))
+      + _.sum(c_transfers.map(t => t.value / decimals))
+      - _.sum(c_withdraws.map(w => w.amount / decimals));
+    let balance = (_.sum(c_deposits.map(d => d.shares / decimals))
+      + _.sum(c_transfers.map(t => t.shares / decimals))
+      - _.sum(c_withdraws.map(w => w.shares / decimals))) * block.pricePerFullShare;
 
     balanceData.push({
       blockNumber: block.blockNumber,
